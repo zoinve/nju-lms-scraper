@@ -3,23 +3,6 @@ const files = document.getElementById('files');
 const status = document.getElementById('status');
 const refresh = document.getElementById('refresh');
 let busy = false;
-const params = new URL(location.href).searchParams;
-const source = params.get('sourceTabId');
-const sourceTabId = source !== null && /^\d+$/.test(source) ? Number(source) : null;
-if (source !== null) document.body.classList.add('standalone');
-
-async function getSourceTab() {
-  if (source !== null) {
-    if (!Number.isSafeInteger(sourceTabId) || sourceTabId <= 0) throw new Error('来源标签页无效，请回到活动页重新打开。');
-    try {
-      return await chrome.tabs.get(sourceTabId);
-    } catch {
-      throw new Error('原活动标签页已关闭，请打开活动页后重试。');
-    }
-  }
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  return tab;
-}
 
 function showStatus(text, error = false) {
   status.textContent = text;
@@ -38,7 +21,7 @@ async function load() {
   files.replaceChildren();
   showStatus('正在读取…');
   try {
-    const tab = await getSourceTab();
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error('请先打开 LMS 学习活动页面。');
     const data = await send({ type: 'LIST', tabId: tab.id });
     title.textContent = data.title;

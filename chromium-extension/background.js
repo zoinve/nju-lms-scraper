@@ -42,8 +42,8 @@ async function handleMessage(message) {
 
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
-  if (message?.type === 'OPEN_PANEL') {
-    // Bind the panel to the actual sending tab, never a tab ID from page data.
+  if (message?.type === 'PAGE_DOWNLOAD') {
+    // Bind inline UI requests to the actual sending top-level LMS tab.
     if (!sender.tab?.id || sender.frameId !== 0) return;
     (async () => {
       const tab = await chrome.tabs.get(sender.tab.id);
@@ -51,11 +51,11 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       if (url.origin !== 'https://lms.nju.edu.cn' ||
           !/^\/course\/\d+\/learning-activity\/?$/.test(url.pathname) ||
           !/^#\/\d+\/?$/.test(url.hash)) throw new Error('请打开具体的 LMS 学习活动。');
-      const panel = new URL(chrome.runtime.getURL('popup.html'));
-      panel.searchParams.set('sourceTabId', String(tab.id));
-      await chrome.tabs.create({ url: panel.href, active: true });
-      return { ok: true };
-    })().then(respond, () => respond({ ok: false, error: '无法打开下载页，请刷新活动页面后重试。' }));
+      return handleMessage({ ...message, type: 'DOWNLOAD', tabId: sender.tab.id });
+    })().then(data => respond({ ok: true, data }), error => {
+      const known = error instanceof Error && !/https?:\/\//.test(error.message);
+      respond({ ok: false, error: known ? error.message : '下载失败，请刷新活动页面后重试。' });
+    });
     return true;
   }
   // Only the extension's own download UI may initiate privileged downloads.

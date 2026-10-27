@@ -15,19 +15,45 @@
   const shadow = launcher.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = `
-    button { all:unset; box-sizing:border-box; display:flex; align-items:center;
+    .launcher { all:unset; box-sizing:border-box; display:flex; align-items:center;
       justify-content:center; width:44px; height:44px; border-radius:50%;
       background:#4d0099; color:#fff; cursor:pointer;
       box-shadow:0 3px 12px #0003; transition:background .15s,transform .15s; }
-    button:hover { background:#3b0075; transform:translateY(-2px); }
+    .launcher:hover { background:#3b0075; transform:translateY(-2px); }
     button:focus-visible { outline:3px solid #bc8fe8; outline-offset:3px; }
     button:disabled { opacity:.65; cursor:wait; }
     svg { display:block; width:22px; height:22px; pointer-events:none; }
+    [hidden] { display:none!important; }
+    .panel { all:initial; box-sizing:border-box; position:absolute; bottom:56px; left:0;
+      width:340px; max-width:calc(100vw - 40px); max-height:calc(100dvh - 100px);
+      overflow:auto; padding:18px; border:1px solid #e1d9eb; border-radius:16px;
+      background:#fff; color:#20242c; box-shadow:0 8px 32px #21004126;
+      font:13px/1.6 system-ui,"Microsoft YaHei",sans-serif; }
+    .header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .heading { margin:0; color:#4d0099; font-size:16px; font-weight:700; }
+    .panel button { all:unset; box-sizing:border-box; display:inline-flex; align-items:center;
+      justify-content:center; padding:7px 12px; border-radius:7px; background:#4d0099;
+      color:#fff; font:inherit; cursor:pointer; }
+    .panel button:hover { background:#3b0075; }
+    .panel button:focus-visible { outline:3px solid #bc8fe8; outline-offset:2px; }
+    .panel button:disabled { opacity:.55; cursor:wait; }
+    .panel .close { padding:0; width:28px; height:28px; background:transparent; color:#69717c; font-size:23px; }
+    .panel .close:hover { background:#f1eafa; color:#4d0099; }
+    .activity-title { margin:12px 0; font-size:13px; overflow-wrap:anywhere; }
+    .file { padding:12px; margin:10px 0; border:1px solid #e9e4ef; border-radius:10px; background:#faf8fd; }
+    .name { font-weight:600; overflow-wrap:anywhere; }
+    .size { margin:5px 0 9px; color:#69717c; font-size:12px; }
+    .status { margin:12px 0; overflow-wrap:anywhere; }
+    .error { color:#b42332; }
+    .panel .refresh { background:#f1eafa; color:#4d0099; }
+    .panel .refresh:hover { background:#e5d8f3; }
+    .note { margin:12px 0 0; color:#69717c; font-size:11px; }
     @media (prefers-reduced-motion:reduce) { button { transition:none; } }
-    @media print { button { display:none; } }
+    @media print { .launcher,.panel { display:none; } }
   `;
   const launchButton = document.createElement('button');
   launchButton.type = 'button';
+  launchButton.className = 'launcher';
   launchButton.title = '打开 LMS 文件下载';
   launchButton.setAttribute('aria-label', '打开 LMS 文件下载');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -38,24 +64,111 @@
   path.setAttribute('d', 'M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4');
   svg.append(path);
   launchButton.append(svg);
-  shadow.append(style, launchButton);
-  launchButton.addEventListener('click', async () => {
-    launchButton.disabled = true;
+  function element(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+  const panel = element('section', 'panel');
+  panel.id = 'nju-download-panel';
+  panel.hidden = true;
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', '课程文件下载');
+  launchButton.setAttribute('aria-controls', panel.id);
+  launchButton.setAttribute('aria-expanded', 'false');
+  const header = element('div', 'header');
+  const heading = element('h2', 'heading', '课程文件下载');
+  const closeButton = element('button', 'close', '×');
+  closeButton.type = 'button';
+  closeButton.setAttribute('aria-label', '关闭下载弹窗');
+  header.append(heading, closeButton);
+  const activityTitle = element('p', 'activity-title');
+  const fileList = element('div', 'files');
+  const status = element('p', 'status');
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  const refreshButton = element('button', 'refresh', '重新读取');
+  refreshButton.type = 'button';
+  panel.append(header, activityTitle, fileList, status, refreshButton,
+    element('p', 'note', '使用当前登录状态，下载进度请查看浏览器下载列表。'));
+  shadow.append(style, panel, launchButton);
+  let generation = 0;
+  let routeKey = '';
+  function closePanel(focus = false) {
+    panel.hidden = true;
+    launchButton.setAttribute('aria-expanded', 'false');
+    generation++;
+    if (focus) launchButton.focus();
+  }
+  function showStatus(text, error = false) {
+    status.textContent = text;
+    status.classList.toggle('error', error);
+  }
+  async function loadPanel() {
+    const requestGeneration = ++generation;
+    fileList.replaceChildren();
+    activityTitle.textContent = '正在读取当前活动…';
+    refreshButton.disabled = true;
+    showStatus('正在读取…');
     try {
-      const result = await chrome.runtime.sendMessage({ type: 'OPEN_PANEL' });
-      if (!result?.ok) throw new Error(result?.error || '无法打开下载页。');
-      launchButton.title = '打开 LMS 文件下载';
-    } catch {
-      launchButton.title = '扩展无法连接，请刷新页面后重试';
+      const data = await handleActivityMessage({ type: 'NJU_LIST' });
+      if (requestGeneration !== generation || panel.hidden) return;
+      activityTitle.textContent = data.title;
+      for (const file of data.files) {
+        const card = element('div', 'file');
+        const size = Number.isFinite(file.size) && file.size >= 0 ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : '大小未知';
+        const download = element('button', '', file.supported ? '下载文件' : '暂不支持此类型');
+        download.type = 'button';
+        download.disabled = !file.supported;
+        download.addEventListener('click', async () => {
+          download.disabled = true;
+          showStatus('正在获取文件地址…');
+          try {
+            const result = await chrome.runtime.sendMessage({ type: 'PAGE_DOWNLOAD',
+              courseId: data.courseId, activityId: data.activityId, uploadId: file.id });
+            if (!result?.ok) throw new Error(result?.error || '扩展无法连接，请刷新页面后重试。');
+            if (generation === requestGeneration) showStatus('已交给浏览器下载，请在下载列表查看进度。');
+          } catch (error) {
+            if (generation === requestGeneration) showStatus(error.message, true);
+          } finally {
+            download.disabled = !file.supported;
+          }
+        });
+        card.append(element('div', 'name', file.name), element('div', 'size', size), download);
+        fileList.append(card);
+      }
+      showStatus(data.files.length ? '选择要保存的附件。' : '当前活动没有附件。');
+    } catch (error) {
+      if (generation === requestGeneration) showStatus(error.message, true);
     } finally {
-      launchButton.disabled = false;
+      if (generation === requestGeneration) refreshButton.disabled = false;
     }
+  }
+  launchButton.addEventListener('click', () => {
+    if (!panel.hidden) return closePanel();
+    panel.hidden = false;
+    launchButton.setAttribute('aria-expanded', 'true');
+    closeButton.focus();
+    loadPanel();
+  });
+  closeButton.addEventListener('click', () => closePanel(true));
+  refreshButton.addEventListener('click', loadPanel);
+  document.addEventListener('pointerdown', event => {
+    if (!panel.hidden && !event.composedPath().includes(launcher)) closePanel();
+  }, true);
+  shadow.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { closePanel(true); event.stopPropagation(); }
   });
   function updateLauncher() {
     try {
-      currentActivity();
+      const ids = currentActivity();
+      const nextKey = `${ids.courseId}/${ids.activityId}`;
+      if (nextKey !== routeKey) { closePanel(); routeKey = nextKey; }
       if (!launcher.isConnected) document.documentElement.append(launcher);
     } catch {
+      closePanel();
+      routeKey = '';
       launcher.remove();
     }
   }
@@ -88,9 +201,7 @@
     return { ...ids, data };
   }
 
-  chrome.runtime.onMessage.addListener((message, sender, respond) => {
-    if (sender.id !== chrome.runtime.id || !['NJU_LIST', 'NJU_RESOLVE'].includes(message?.type)) return;
-    (async () => {
+  async function handleActivityMessage(message) {
       const { courseId, activityId, data } = await activity();
       const uploads = Array.isArray(data.uploads) ? data.uploads : [];
       if (message.type === 'NJU_LIST') {
@@ -113,7 +224,10 @@
       const url = new URL(result.url);
       if (url.protocol !== 'https:' || url.username || url.password) throw new Error('服务器返回了不支持的文件地址。');
       return { url: url.href, name: file.name, size: file.size, activityId };
-    })().then(data => respond({ ok: true, data }), error => {
+  }
+  chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    if (sender.id !== chrome.runtime.id || !['NJU_LIST', 'NJU_RESOLVE'].includes(message?.type)) return;
+    handleActivityMessage(message).then(data => respond({ ok: true, data }), error => {
       const known = error instanceof Error && !/https?:\/\//.test(error.message);
       respond({ ok: false, error: known ? error.message : '请求失败，请检查网络或重新登录。' });
     });
