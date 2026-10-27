@@ -9,6 +9,61 @@
     return { courseId: path[1], activityId: hash[1] };
   }
 
+  const launcher = document.createElement('div');
+  launcher.id = 'nju-lms-download-launcher';
+  launcher.style.cssText = 'all:initial!important;position:fixed!important;left:20px!important;bottom:20px!important;width:44px!important;height:44px!important;z-index:2147483647!important;';
+  const shadow = launcher.attachShadow({ mode: 'open' });
+  const style = document.createElement('style');
+  style.textContent = `
+    button { all:unset; box-sizing:border-box; display:flex; align-items:center;
+      justify-content:center; width:44px; height:44px; border-radius:50%;
+      background:#4d0099; color:#fff; cursor:pointer;
+      box-shadow:0 3px 12px #0003; transition:background .15s,transform .15s; }
+    button:hover { background:#3b0075; transform:translateY(-2px); }
+    button:focus-visible { outline:3px solid #bc8fe8; outline-offset:3px; }
+    button:disabled { opacity:.65; cursor:wait; }
+    svg { display:block; width:22px; height:22px; pointer-events:none; }
+    @media (prefers-reduced-motion:reduce) { button { transition:none; } }
+    @media print { button { display:none; } }
+  `;
+  const launchButton = document.createElement('button');
+  launchButton.type = 'button';
+  launchButton.title = '打开 LMS 文件下载';
+  launchButton.setAttribute('aria-label', '打开 LMS 文件下载');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  for (const [key, value] of Object.entries({ viewBox: '0 0 24 24', fill: 'none',
+    stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round',
+    'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(key, value);
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4');
+  svg.append(path);
+  launchButton.append(svg);
+  shadow.append(style, launchButton);
+  launchButton.addEventListener('click', async () => {
+    launchButton.disabled = true;
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'OPEN_PANEL' });
+      if (!result?.ok) throw new Error(result?.error || '无法打开下载页。');
+      launchButton.title = '打开 LMS 文件下载';
+    } catch {
+      launchButton.title = '扩展无法连接，请刷新页面后重试';
+    } finally {
+      launchButton.disabled = false;
+    }
+  });
+  function updateLauncher() {
+    try {
+      currentActivity();
+      if (!launcher.isConnected) document.documentElement.append(launcher);
+    } catch {
+      launcher.remove();
+    }
+  }
+  window.addEventListener('hashchange', updateLauncher);
+  window.addEventListener('popstate', updateLauncher);
+  if (window.navigation) window.navigation.addEventListener('navigatesuccess', updateLauncher);
+  updateLauncher();
+
   async function json(path) {
     const response = await fetch(path, {
       credentials: 'same-origin', cache: 'no-store',
