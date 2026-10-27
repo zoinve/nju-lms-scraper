@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
   "name": "南大 LMS 文件下载",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "在南大 LMS 学习活动页面中，使用当前登录状态下载文档附件。",
   "permissions": ["activeTab", "downloads"],
   "host_permissions": ["https://lms.nju.edu.cn/*"],
   "background": { "service_worker": "background.js" },
   "action": { "default_title": "下载 LMS 活动附件", "default_popup": "popup.html" },
   "content_scripts": [{
-    "matches": ["https://lms.nju.edu.cn/course/*/learning-activity*"],
+    "matches": ["https://lms.nju.edu.cn/course/*/learning-activity*", "https://lms.nju.edu.cn/course/*/courseware*"],
     "js": ["content.js"],
     "run_at": "document_idle"
   }]

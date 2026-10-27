@@ -15,7 +15,7 @@ async function handleMessage(message) {
   if (!Number.isInteger(message.tabId)) throw new Error('找不到活动标签页。');
   const tab = await chrome.tabs.get(message.tabId);
   const url = new URL(tab.url);
-  if (url.origin !== 'https://lms.nju.edu.cn' || !/^\/course\/\d+\/learning-activity\/?$/.test(url.pathname)) {
+  if (url.origin !== 'https://lms.nju.edu.cn' || !/^\/course\/\d+\/(learning-activity|courseware)\/?$/.test(url.pathname)) {
     throw new Error('请在 LMS 学习活动页面使用扩展。');
   }
   let result;
@@ -49,8 +49,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
       const tab = await chrome.tabs.get(sender.tab.id);
       const url = new URL(tab.url);
       if (url.origin !== 'https://lms.nju.edu.cn' ||
-          !/^\/course\/\d+\/learning-activity\/?$/.test(url.pathname) ||
-          !/^#\/\d+\/?$/.test(url.hash)) throw new Error('请打开具体的 LMS 学习活动。');
+          !/^\/course\/\d+\/(learning-activity|courseware)\/?$/.test(url.pathname)) throw new Error('请打开 LMS 活动或课件列表。');
       return handleMessage({ ...message, type: 'DOWNLOAD', tabId: sender.tab.id });
     })().then(data => respond({ ok: true, data }), error => {
       const known = error instanceof Error && !/https?:\/\//.test(error.message);

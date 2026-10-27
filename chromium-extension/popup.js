@@ -46,7 +46,7 @@ async function load() {
         showStatus('正在获取文件地址…');
         try {
           await send({ type: 'DOWNLOAD', tabId: tab.id, courseId: data.courseId,
-            activityId: data.activityId, uploadId: file.id });
+            activityId: file.activityId || data.activityId, uploadId: file.id });
           showStatus('已交给浏览器下载，请在下载列表查看进度。');
         } catch (error) {
           showStatus(error.message, true);
