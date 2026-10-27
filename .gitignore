@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 .auth/
 data/
+dist/
+*.crx
+*.pem
+*.key
+*.p12
+*.pfx
+*.part

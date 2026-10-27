@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>南大 LMS 文件下载</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header><span class="brand">NJU LMS</span><h1>课程文件下载</h1></header>
+  <p id="title">正在读取当前活动…</p>
+  <div id="files"></div>
+  <p id="status" role="status" aria-live="polite"></p>
+  <button id="refresh" class="secondary" type="button">重新读取</button>
+  <footer>使用当前浏览器的登录状态。<br>下载进度和结果请查看浏览器下载列表。</footer>
+  <script src="popup.js"></script>
+</body>
+</html>
